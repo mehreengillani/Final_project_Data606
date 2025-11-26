@@ -1,0 +1,402 @@
+---
+title: "DATA 606 Data Project Proposal"
+author: "Mehreen Ali Gillani"
+output: html_document
+date: "2025-11-02"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+set.seed(1234)
+library(tidyverse)
+library(patchwork)
+library(knitr)
+library(kableExtra)
+```
+
+
+
+### Data Preparation
+
+```{r}
+library(readr)
+#link to github data file 
+flights_data_url <- 'https://raw.githubusercontent.com/mehreengillani/Final_project_Data606/refs/heads/main/flights_data.csv'
+
+
+# read
+flights <- read_csv(flights_data_url)
+
+```
+```{r}
+#print number of unique values for CARRIER_GROUP
+print('CARRIER_GROUP unique:'); unique(flights$CARRIER_GROUP) %>% sort()
+
+#print number of unique values for DISTANCE_GROUP
+print('DISTANCE_GROUP unique:'); unique(flights$DISTANCE_GROUP) %>% sort()
+
+#print number of unique values for MONTH
+
+print('Month unique:'); unique(flights$MONTH) %>% sort()
+
+
+```
+
+```{r}
+# Data cleaning and preparation for domestic flights only
+flights_clean <- flights %>%
+  # Convert all column names to lowercase first
+  rename_with(tolower) %>%
+  filter(!is.na(passengers), !is.na(distance))
+
+# Create variables using only existing categories in the data
+flights_clean <- flights_clean %>%
+  mutate(
+    # Use only distance groups that actually exist in the data
+    distance_cat = case_when(
+      distance_group == 1 ~ "less than 500 miles",
+      distance_group == 2 ~ "500-999 miles", 
+      distance_group == 3 ~ "1000-1499 miles",
+      distance_group == 4 ~ "1500-1999 miles",
+      distance_group == 5 ~ "2000-2499 miles",
+      distance_group == 6 ~ "2500-2999 miles",
+      distance_group == 7 ~ "3000-3499 miles",
+      distance_group == 8 ~ "3500-3999 miles",
+      distance_group == 9 ~ "4000-4499 miles",
+      distance_group == 10 ~ "4500-4999 miles",
+      distance_group == 11 ~ "5000-5499 miles",
+      distance_group == 12 ~ "5500-5999 miles",
+      distance_group == 13 ~ "6000-6499 miles", 
+      distance_group == 15 ~ "7000-7499 miles",
+      TRUE ~ NA_character_  # Fixed: TRUE in uppercase
+    ),
+    
+    # Use only carrier groups that actually exist in domestic data
+    carrier_type = case_when(
+      carrier_group == 1 ~ "regional carriers",
+      carrier_group == 2 ~ "national carriers", 
+      carrier_group == 3 ~ "major carriers",
+      TRUE ~ NA_character_  # Fixed: TRUE in uppercase
+    ),
+    
+    # Create month names for better visualization
+    month_name = factor(month, 
+                       levels = 1:7,
+                       labels = c("jan", "feb", "mar", "apr", "may", "jun", "jul")),
+    
+    # Create route identifier
+    route = paste(origin, dest, sep = " - "),
+    
+    # Calculate simple load metrics
+    load_factor = passengers / 180 # simplified load factor metric by assuming a fixed aircraft capacity of 180 seats
+  )
+
+# Remove rows with NA in critical categorical variables
+flights_clean <- flights_clean %>%
+  filter(!is.na(distance_cat), !is.na(carrier_type))
+
+# Factor the categorical variables with only existing levels
+existing_distance_cats <- c("less than 500 miles", "500-999 miles", "1000-1499 miles",
+                           "1500-1999 miles", "2000-2499 miles", "2500-2999 miles",
+                           "3000-3499 miles", "3500-3999 miles", "4000-4499 miles",
+                           "4500-4999 miles", "5000-5499 miles", "5500-5999 miles",
+                           "6000-6499 miles", "7000-7499 miles")
+
+existing_carrier_cats <- c("major carriers", "national carriers", "regional carriers")
+
+flights_clean$distance_cat <- factor(flights_clean$distance_cat,
+                                    levels = existing_distance_cats)
+
+flights_clean$carrier_type <- factor(flights_clean$carrier_type,
+                                    levels = existing_carrier_cats)
+
+# For analysis, create simplified distance categories based on actual data distribution
+flights_clean <- flights_clean %>%
+  mutate(
+    distance_simple = case_when(
+      distance_group %in% 1:2 ~ "short (<1000 mi)",
+      distance_group %in% 3:5 ~ "medium (1000-2499 mi)", 
+      distance_group %in% 6:10 ~ "long (2500-4999 mi)",
+      distance_group >= 11 ~ "very long (5000+ mi)"
+    ),
+    distance_simple = factor(distance_simple,
+                            levels = c("short (<1000 mi)", "medium (1000-2499 mi)",
+                                      "long (2500-4999 mi)", "very long (5000+ mi)"))
+  )
+
+
+kable(head(flights_clean)) %>%
+  kable_styling(bootstrap_options = c("striped", "hover", "condensed")) %>%
+  scroll_box(width = "100%", height = "400px")
+```
+
+```{r remove_year}
+print('year unique:'); unique(flights_clean$year) %>% sort()
+# Remove year column as it has only one value
+
+flights_clean <- flights_clean %>%
+  select(-year)
+```
+
+Step 2: Handle missing values
+```{r}
+# Check for missing values in each column
+colSums(is.na(flights_clean))
+```
+Only freight has missing values 
+```{r}
+# fill NA with 0, we assume no cargo carried in those flights
+flights_clean$freight[is.na(flights_clean$freight)] <- 0
+colSums(is.na(flights_clean))
+```
+**Fix data types**
+```{r}
+print('unique_carrier :'); unique(flights_clean$unique_carrier) %>% sort()
+print('unique class :'); unique(flights_clean$class) %>% sort()
+#print('unique dest :'); unique(flights_clean$dest) %>% sort()
+```
+
+
+```{r}
+# Convert appropriate columns to factors
+flights_clean <- flights_clean %>%
+  mutate(
+    unique_carrier = as.factor(unique_carrier),
+    unique_carrier_name = as.factor(unique_carrier_name),
+    origin = as.factor(origin),
+    dest = as.factor(dest),
+    origin_state_abr = as.factor(origin_state_abr),
+    dest_state_abr = as.factor(dest_state_abr),
+    month_name = as.factor(month_name),
+    class = as.factor(class),
+    carrier_type = as.factor(carrier_type),
+    distance_cat = as.factor(distance_cat),
+    distance_simple = as.factor(distance_simple)
+  )
+```
+**check duplicates**
+```{r}
+# Check for duplicate rows
+sum(duplicated(flights_clean))
+
+```
+Only 47 duplicates are in the dataset so we will delete those
+```{r}
+# Remove duplicates if any
+flights_clean <- distinct(flights_clean)
+sum(duplicated(flights_clean)) #check again for duplicates
+```
+
+ **Handle inconsistent text data**
+```{r}
+# Clean text columns (remove extra spaces, convert to proper case)
+flights_clean <- flights_clean %>%
+  mutate(
+    origin_city_name = trimws(origin_city_name),
+    dest_city_name = trimws(dest_city_name),
+    unique_carrier_name = trimws(unique_carrier_name)
+  )
+flights_clean %>% #show number of unique origin, dest, carriers 
+  summarise(
+    n_origin_cities = n_distinct(origin_city_name),
+    n_dest_cities = n_distinct(dest_city_name),
+    n_carriers = n_distinct(unique_carrier_name)
+  )
+```
+**Validate numeric range**
+```{r}
+
+# Check for negative values in each column
+negative_counts <- flights_clean %>%
+  summarise(
+    negative_freight = sum(freight < 0, na.rm = TRUE),
+    negative_mail = sum(mail < 0, na.rm = TRUE),
+    negative_distance = sum(distance < 0, na.rm = TRUE),
+    negative_passengers = sum(passengers < 0, na.rm = TRUE)
+  )
+
+negative_counts
+```
+No negative values.
+
+```{r}
+
+# Check for impossible scenarios and data quality issues
+flights_clean %>%
+  summarise(
+    zero_distance = sum(distance == 0),
+    zero_passengers_but_freight = sum(passengers == 0 & freight > 0),
+    invalid_routes = sum(as.character(origin) == as.character(dest)),
+    over_capacity = sum(load_factor > 1, na.rm = TRUE),
+    missing_passengers = sum(passengers == 0)
+  )
+```
+
+
+```{r}
+# Remove invalid routes
+flights_clean <- flights_clean %>%
+  filter(as.character(origin) != as.character(dest))
+
+# Investigate over-capacity and zero-passenger flights
+flights_clean %>%
+  filter(load_factor > 1 | passengers == 0) %>%
+  select(passengers, freight, load_factor, distance, carrier_type) %>%
+  summary()
+```
+
+**Problems Identified:**
+
+Extreme outliers: Max passengers = 87,551 (impossible for single flight)
+Invalid distances: Min 3 miles (too short for commercial flights)
+Freight outliers: Max 55M units with huge variance
+
+```{r}
+flights_clean <- flights_clean %>%
+  filter(
+    # Remove impossible values
+    passengers <= 1000,        # Realistic single-flight capacity
+    distance >= 50,           # Minimum realistic flight distance
+    distance <= 6000,         # Maximum realistic domestic US
+    freight <= 1000000        # Remove extreme freight outliers
+  ) %>%
+  # Remove remaining invalid routes
+  filter(as.character(origin) != as.character(dest))
+```
+
+```{r}
+summary(flights_clean)
+```
+**Temporal Validation**
+```{r}
+# Ensure all months have reasonable data
+flights_clean %>%
+  group_by(month_name) %>%
+  summarise(
+    n_flights = n(),
+    avg_passengers = mean(passengers)
+  )
+
+```
+```{r}
+# Verify categorical mappings
+flights_clean %>%
+  count(distance_group, distance_cat) %>%
+  arrange(distance_group)
+
+```
+
+**Check flights with no passengers**
+
+```{r}
+# Check flights with no passengers
+passenger_summary <- flights_clean %>%
+  summarise(
+    total_flights = n(),
+    zero_passenger_flights = sum(passengers == 0),
+    zero_passenger_percent = round(mean(passengers == 0) * 100, 2)
+  )
+
+passenger_summary
+```
+
+
+```{r}
+# Calculate percentage of flights with passengers less than 5, 10 and  20
+passenger_threshold_analysis <- flights_clean %>%
+  summarise(
+    total_flights = n(),
+    
+    # Counts
+    less_than_10 = sum(passengers < 10),
+    less_than_20 = sum(passengers < 20),
+    less_than_5 = sum(passengers < 5),
+    
+    # Percentages
+    percent_less_than_10 = round(mean(passengers < 10) * 100, 2),
+    percent_less_than_20 = round(mean(passengers < 20) * 100, 2),
+    percent_less_than_5 = round(mean(passengers < 5) * 100, 2)
+  )
+
+passenger_threshold_analysis
+
+# See distribution of small passenger counts
+small_flights <- flights_clean %>%
+  filter(passengers < 20) %>%
+  count(passengers) %>%
+  arrange(passengers)
+
+small_flights
+
+```
+
+  
+```{r}
+# 20-passenger minimum for cleaner analysis
+flights_clean <- flights_clean %>%
+  filter(passengers >= 20)
+# Verify removal
+flights_clean %>% 
+  summarise(
+    remaining_flights = n(),
+    lessThan_passenger_check = sum(passengers <20)
+  )
+
+```
+
+  * Dataset reduced from 65,996 to ~32476 flights
+  * Removes noise from cargo-only operations
+  * Ensures analysis focuses purely on passenger travel patterns
+
+```{r}
+# Comprehensive data cleanliness verification
+cleanliness_checks <- list(
+  
+  # 1. Missing values check
+  missing_values = colSums(is.na(flights_clean)),
+  
+  # 2. Basic structure
+  structure = glimpse(flights_clean),
+  
+  # 3. Invalid business logic
+  business_rules = flights_clean %>%
+    summarise(
+      invalid_routes = sum(as.character(origin) == as.character(dest)),
+      impossible_load = sum(load_factor > 1.2),
+      zero_distance = sum(distance == 0),
+      negative_values = sum(passengers < 0 | freight < 0 | mail < 0 | distance < 0)
+    ),
+  
+  # 4. Data ranges
+  realistic_ranges = flights_clean %>%
+    summarise(
+      min_passengers = min(passengers),
+      max_passengers = max(passengers),
+      min_distance = min(distance),
+      max_distance = max(distance),
+      min_load = min(load_factor, na.rm = TRUE),
+      max_load = max(load_factor, na.rm = TRUE)
+    ),
+  
+  # 5. Duplicates check
+  duplicates = sum(duplicated(flights_clean)),
+  
+  # 6. Factor level consistency
+  factor_levels = list(
+    distance_cat = levels(flights_clean$distance_cat),
+    carrier_type = levels(flights_clean$carrier_type),
+    month_name = levels(flights_clean$month_name)
+  )
+)
+
+# Print results
+cleanliness_checks
+
+``` 
+
+```{r}
+# Save as RDS for preserving factor levels and data types
+saveRDS(flights_clean, "flights_clean_passenger_analysis.rds")
+
+```
+
