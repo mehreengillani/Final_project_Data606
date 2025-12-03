@@ -1,0 +1,606 @@
+---
+title: "Visualization_FinalProject_606"
+author: "Mehreen Ali Gillani"
+output: html_document
+date: "2025-11-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+### Statistical Analysis
+
+```{r}
+# import Libraries
+
+library(GGally)
+library(ggplot2)
+library(scales)
+library(tidyverse)
+
+
+```
+
+**Read Flights**
+```{r read_file}
+# Read the cleaned dataset from RDS file
+flights <- readRDS("flights_clean_passenger_analysis.rds")
+
+# Verify the loaded data
+head(flights)
+
+# Create summary statistics
+summary_table <- flights %>%
+  summarise(
+    total_flights = n(),
+    total_passengers = sum(passengers, na.rm = TRUE),
+    total_freight = sum(freight, na.rm = TRUE),
+    total_mail = sum(mail, na.rm = TRUE),
+    avg_distance = mean(distance, na.rm = TRUE),
+    unique_routes = n_distinct(route),
+    unique_carriers = n_distinct(unique_carrier)
+  )
+
+```
+
+### Research Questions
+
+**1. Seasonal Flight Operations:** How do flight frequencies vary across months?
+Statistical Framework:
+
+Null Hypothesis (H₀): There is no significant difference in mean flight frequencies across months (μ_jan = μ_feb = μ_mar = μ_apr = μ_may = μ_jun = μ_jul)
+Alternative Hypothesis (H₁): Mean flight frequencies differ significantly across months, with summer months (June-July) showing elevated frequencies driven by seasonal travel patterns
+  * Response: flight_count (Numerical)
+  * Explanatory: month (Categorical) <br>
+  
+```{r}
+# Create summary data for monthly analysis
+monthly_summary <- flights %>%
+  group_by(month) %>%
+  summarise(flight_count = n()) %>%
+  mutate(month_name = factor(c("January", "February", "March", "April", "May", "June", "July")[month],
+                            levels = c("January", "February", "March", "April", "May", "June", "July")))
+
+# View the summary data
+print(monthly_summary)
+```
+
+```{r}
+# Basic statistics
+cat("\n=== SUMMARY STATISTICS ===\n")
+cat("Total flights:", format(sum(monthly_summary$flight_count), big.mark = ","), "\n")
+cat("Average monthly flights:", format(mean(monthly_summary$flight_count), big.mark = ","), "\n")
+cat("Month with highest flights:", monthly_summary$month_name[which.max(monthly_summary$flight_count)], "\n")
+cat("Month with lowest flights:", monthly_summary$month_name[which.min(monthly_summary$flight_count)], "\n")
+
+# Calculate percentage change from lowest to highest month
+lowest_count <- min(monthly_summary$flight_count)
+highest_count <- max(monthly_summary$flight_count)
+percentage_increase <- ((highest_count - lowest_count) / lowest_count) * 100
+cat("Seasonal increase from lowest to highest month:", round(percentage_increase, 1), "%\n")
+```
+
+
+```{r}
+# Create the main visualization - Bar chart
+ggplot(monthly_summary, aes(x = month_name, y = flight_count, fill = flight_count)) +
+  geom_col(alpha = 0.8) +
+  geom_text(aes(label = format(flight_count, big.mark = ",")), vjust = -0.5, size = 3.5) +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", name = "Flight Count") +
+  labs(title = "Flight Frequencies by Month",
+       subtitle = "Analysis of Seasonal Patterns in Flight Operations",
+       x = "Month",
+       y = "Number of Flights",
+       caption = paste("Total flights analyzed:", format(sum(monthly_summary$flight_count), big.mark = ","))) +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0, 0.1))) +
+  theme_minimal(base_size = 12) +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold"))
+
+# Alternative: Line plot to show trend
+ggplot(monthly_summary, aes(x = month, y = flight_count, group = 1)) +
+  geom_line(color = "steelblue", linewidth = 1.2) +
+  geom_point(color = "steelblue", size = 3) +
+  geom_text(aes(label = format(flight_count, big.mark = ",")), vjust = -1, size = 3.5) +
+  labs(title = "Seasonal Trend in Flight Frequencies",
+       subtitle = "Monthly progression of flight operations",
+       x = "Month",
+       y = "Number of Flights") +
+  scale_y_continuous(labels = comma, expand = expansion(mult = c(0.1, 0.2)), limits = c(0, NA)) +
+  scale_x_continuous(breaks = 1:7, labels = monthly_summary$month_name) +
+  theme_minimal(base_size = 12) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1),
+        plot.title = element_text(face = "bold"))
+
+```
+
+
+```{r}
+# Calculate month-over-month changes
+monthly_changes <- monthly_summary %>%
+  mutate(previous_month = lag(flight_count),
+         mom_change = flight_count - previous_month,
+         mom_percentage = ((flight_count - previous_month) / previous_month) * 100)
+cat("\n=== MONTH-OVER-MONTH CHANGES ===\n")
+print(monthly_changes %>% select(month_name, flight_count, mom_change, mom_percentage))
+```
+
+```{r}
+
+```
+
+```{r}
+# Statistical test for monthly differences (Correct One-way ANOVA)
+cat("\n=== CORRECT STATISTICAL TEST FOR MONTHLY DIFFERENCES ===\n")
+
+# Create proper aggregated data - ONE observation per month
+monthly_aggregate <- flights_clean %>%
+  group_by(month, month_name) %>%
+  summarise(flight_count = n(), .groups = 'drop')
+
+# Print the actual data
+print(monthly_aggregate)
+
+# Since we only have 7 data points (one per month), ANOVA is inappropriate
+# Use descriptive statistics instead
+cat("\n=== DESCRIPTIVE ANALYSIS ===\n")
+monthly_aggregate %>%
+  mutate(proportion = flight_count / sum(flight_count)) %>%
+  arrange(month)
+
+# Test summer vs non-summer specifically
+summer_total <- monthly_aggregate %>% 
+  filter(month_name %in% c("jun", "jul")) %>% 
+  pull(flight_count) %>% sum()
+
+non_summer_total <- monthly_aggregate %>% 
+  filter(!month_name %in% c("jun", "jul")) %>% 
+  pull(flight_count) %>% sum()
+
+cat("\nSummer (Jun-Jul) flights:", summer_total, 
+    "(", round(summer_total/(summer_total + non_summer_total)*100, 1), "%)\n")
+cat("Non-summer flights:", non_summer_total, 
+    "(", round(non_summer_total/(summer_total + non_summer_total)*100, 1), "%)\n")
+```
+
+```{r}
+# Chi-Square Test: Are flights distributed equally across months?
+cat("\n=== CHI-SQUARE GOODNESS OF FIT TEST ===\n")
+
+monthly_counts <- flights_clean %>%
+  count(month_name) %>%
+  arrange(match(month_name, c("jan", "feb", "mar", "apr", "may", "jun", "jul")))
+#print(monthly_counts$n)
+# Expected frequencies (if equal distribution)
+expected <- rep(sum(monthly_counts$n) / 7, 7)
+print(expected)
+chi_test <- chisq.test(monthly_counts$n, p = rep(1/7, 7))
+print(chi_test)
+
+# Effect size
+cramers_v <- sqrt(chi_test$statistic / (sum(monthly_counts$n) * (7-1)/7))
+cat("Effect size (Cramer's V):", round(cramers_v, 3), "\n")
+# Measures how strong the monthly differences are (0 = no effect, 1 = maximum effect)
+# Adjusts for sample size and number of categories
+```
+# observed vs expected:
+# Month    Observed   Expected
+# jan      4991       4639.429  (+351.6)
+# feb      4573       4639.429  (-66.4)  
+# mar      4907       4639.429  (+267.6)
+# apr      4407       4639.429  (-232.4)
+# may      4792       4639.429  (+152.6)
+# jun      4811       4639.429  (+171.6)
+# jul      3995       4639.429  (-644.4)
+
+What the Chi-Square Test Does:
+It calculates how much your observed counts (actual data) differ from these expected counts (equal distribution). 
+The large differences (especially January and July) are what produced your significant p-value.
+
+Statistical Conclusion:
+
+REJECT the Null Hypothesis
+Interpretation:
+
+p < 0.05: Reject H₀ - Significant evidence that flight frequencies vary by month
+p ≥ 0.05: Fail to reject H₀ - No significant evidence of monthly variation
+
+Interpretation:
+
+p-value < 2.2e-16 (extremely small) → Strong evidence against H₀
+X-squared = 155.54 with 6 degrees of freedom → Large test statistic
+
+Result: Flight frequencies are NOT equally distributed across months
+
+Statistical Significance:
+The probability of observing this uneven distribution by random chance is virtually zero
+There are statistically significant differences in flight frequencies across months
+
+ffect size (Cramer's V): 0.075 means you have a SMALL EFFECT SIZE
+
+Interpreting Cramer's V:
+
+Value Range	Effect Size	Interpretation
+0.00 - 0.06	Negligible	No practical difference
+0.07 - 0.20	Small	Weak association
+0.21 - 0.35	Medium	Moderate association
+0.36+	Large	Strong association
+
+Real-World Interpretation:
+
+While monthly differences are real and not due to chance
+The magnitude of these differences is quite small
+Month alone explains very little of the variation in flight frequencies
+
+```{r}
+# Check actual monthly distribution
+monthly_counts %>%
+  mutate(percentage = round(n/sum(n)*100, 1)) %>%
+  arrange(month_name)
+```
+
+
+ **Findings:**
+
+Statistical test confirms significant monthly variations (reject H₀)
+But the pattern contradicts the summer peak hypothesis
+January shows the highest flight frequencies in your data
+This is still a valuable finding - sometimes data surprises us and reveals unexpected patterns!
+
+```{r}
+# Summer vs Non-Summer comparison
+summer_months <- c(6, 7)  # June and July
+monthly_summary <- monthly_summary %>%
+  mutate(season = ifelse(month %in% summer_months, "Summer", "Non-Summer"))
+
+summer_stats <- monthly_summary %>%
+  group_by(season) %>%
+  summarise(avg_flights = mean(flight_count),
+            total_flights = sum(flight_count))
+
+cat("\n=== SUMMER VS NON-SUMMER COMPARISON ===\n")
+print(summer_stats)
+
+# Hypothesis evaluation
+highest_month <- monthly_summary$month[which.max(monthly_summary$flight_count)]
+second_highest <- monthly_summary %>% 
+  arrange(desc(flight_count)) %>% 
+  slice(2) %>% 
+  pull(month)
+
+cat("\n=== HYPOTHESIS EVALUATION ===\n")
+cat("Hypothesis: Summer months (June-July) will have the highest flight frequencies\n")
+cat("Result: ")
+if (all(c(highest_month, second_highest) %in% c(6, 7))) {
+  cat("STRONGLY SUPPORTED - Both June and July are the top 2 months\n")
+} else if (any(c(highest_month, second_highest) %in% c(6, 7))) {
+  cat("PARTIALLY SUPPORTED - One summer month is among the top 2\n")
+} else {
+  cat("NOT SUPPORTED - Summer months are not the highest\n")
+}
+
+cat("Top month:", monthly_summary$month_name[which.max(monthly_summary$flight_count)], "\n")
+cat("Second highest month:", monthly_summary %>% 
+      arrange(desc(flight_count)) %>% 
+      slice(2) %>% 
+      pull(month_name), "\n")
+```
+```{r}
+# Create a proper contingency table
+contingency_table <- table(flights$month)
+cat("=== CHI-SQUARE GOODNESS OF FIT TEST ===\n")
+
+# Test if monthly distribution is uniform (null hypothesis)
+chi_test <- chisq.test(contingency_table)
+print(chi_test)
+
+# Expected frequencies if uniform (null hypothesis)
+expected <- rep(sum(contingency_table)/length(contingency_table), length(contingency_table))
+cat("\nExpected frequencies under null hypothesis (equal distribution):\n")
+print(expected)
+
+cat("\nObserved frequencies:\n")
+print(contingency_table)
+
+# Calculate effect size
+effect_size <- sqrt(chi_test$statistic / sum(contingency_table))
+cat("\nEffect size (Phi):", round(effect_size, 3), "\n")
+
+```
+**Statistical Conclusion: REJECT NULL HYPOTHESIS ✅ **
+
+**Statistical Interpretation**
+
+"We reject the null hypothesis that flight frequencies are uniformly distributed across months. The Chi-square goodness of fit test reveals statistically significant variation in flight frequencies across different months (χ² = 155.54, df = 6, p-value = 2.2e)."
+
+```{r}
+# Calculate percentage differences from expected
+monthly_deviation <- data.frame(
+  month = 1:7,
+  month_name = c("January", "February", "March", "April", "May", "June", "July"),
+  observed = as.numeric(contingency_table),
+  expected = expected[1],
+  difference = as.numeric(contingency_table) - expected[1],
+  percentage_diff = round((as.numeric(contingency_table) - expected[1]) / expected[1] * 100, 2)
+)
+
+cat("=== MONTHLY DEVIATIONS FROM EXPECTED ===\n")
+print(monthly_deviation)
+
+# Highlight significant patterns
+cat("\n=== KEY PATTERNS ===\n")
+cat("• Peak month (June):", monthly_deviation$percentage_diff[6], "% above expected\n")
+cat("• Lowest month (February):", monthly_deviation$percentage_diff[2], "% below expected\n")
+cat("• Range:", round(max(monthly_deviation$percentage_diff) - min(monthly_deviation$percentage_diff), 1), "% difference\n")
+
+cat("\n• Months above expected:", paste(monthly_deviation$month_name[monthly_deviation$difference > 0], collapse = ", "), "\n")
+cat("• Months below expected:", paste(monthly_deviation$month_name[monthly_deviation$difference < 0], collapse = ", "), "\n")
+```
+
+  Research Question: How do flight frequencies and passenger volumes differ across carrier types (major, national, and regional carriers)?
+  Hypotheses:
+
+Null Hypothesis (H₀):
+
+There is no significant difference in flight frequencies and passenger volumes among major carriers, national carriers, and regional carriers.
+
+Statistical Form:
+μ_major = μ_national = μ_regional
+(where μ represents mean flight frequencies or passenger volumes)
+
+Alternative Hypothesis (H₁):
+
+There are significant differences in flight frequencies and passenger volumes among carrier types, with major carriers handling higher volumes than national and regional carriers.
+Statistical Form:
+At least one carrier type has significantly different mean flight frequencies or passenger volumes, with major carriers expected to demonstrate the highest values.
+
+Variables:
+
+Response variables: flight_count (numerical), passengers (numerical)
+Explanatory variable: carrier_type (categorical, 3 levels: major, national, regional)
+
+```{r}
+# Statistical Analysis: Carrier Type vs Flight Frequencies
+cat("\n=== CARRIER TYPE ANALYSIS ===\n")
+
+# 1. Count flights by carrier type
+carrier_summary <- flights_clean %>%
+  group_by(carrier_type) %>%
+  summarise(
+    flight_count = n(),
+    total_passengers = sum(passengers),
+    avg_passengers = mean(passengers),
+    .groups = 'drop'
+  )
+
+print(carrier_summary)
+
+```
+```{r}
+# 2. Visualize the differences
+ggplot(carrier_summary, aes(x = carrier_type, y = flight_count, fill = carrier_type)) +
+  geom_bar(stat = "identity") +
+  geom_text(aes(label = flight_count), vjust = -0.5, size = 5) +
+  labs(title = "Flight Counts by Carrier Type",
+       x = "Carrier Type", y = "Number of Flights") +
+  theme_classic()
+```
+```{r}
+# 3. Perform Chi-Square Test (Simplest approach)
+cat("\n=== CHI-SQUARE TEST ===\n")
+chi_test <- chisq.test(carrier_summary$flight_count)
+print(chi_test)
+```
+**Statistical Conclusion: REJECT THE NULL HYPOTHESIS**
+
+Interpretation:
+
+p-value < 2.2e-16: Extremely significant (virtually zero chance this pattern is random)
+X-squared = 11,355: Massive test statistic
+df = 2: Comparing 3 carrier types
+
+What This Means:
+
+STRONG EVIDENCE that flight frequencies are NOT equally distributed across carrier types
+
+
+```{r}
+# 4. Compare passenger volumes (ANOVA)
+cat("\n=== PASSENGER VOLUME COMPARISON ===\n")
+anova_test <- aov(passengers ~ carrier_type, data = flights_clean)
+summary(anova_test)
+```
+**Statistical Conclusion: REJECT THE NULL HYPOTHESIS**
+
+**ANOVA Results Interpretation:**
+
+p-value < 2e-16: Extremely significant
+F-value = 615.1: Very large F-statistic
+**Significance: ***: Highest significance level
+What This Means:
+
+STRONG EVIDENCE that passenger volumes differ significantly across carrier types
+
+Key Findings:
+
+Flight counts differ by carrier type (Chi-square test)
+Passenger volumes differ by carrier type (ANOVA test)
+
+```{r}
+library(kableExtra)
+# 5. Simple percentage breakdown
+cat("\n=== PERCENTAGE BREAKDOWN ===\n")
+carrier_summary %>%
+  mutate(
+    flight_percent = round(flight_count / sum(flight_count) * 100, 1),
+    passenger_percent = round(total_passengers / sum(total_passengers) * 100, 1)
+  ) %>%
+  select(carrier_type, flight_count, flight_percent, total_passengers, avg_passengers, passenger_percent)%>%
+  kable()
+
+```
+**Key Insight:**
+
+Major carriers dominate the market, handling:
+
+61% of all flights
+58% of all passengers
+
+```{r}
+# Create summary data for analysis
+flight_summary <- flights %>%
+  group_by(month, carrier_type) %>%
+  summarise(flight_count = n(), .groups = 'drop')
+
+# View the summary data
+print(flight_summary)
+```
+
+
+```{r}
+# Create the main visualization
+ggplot(flight_summary, aes(x = factor(month), y = flight_count, fill = carrier_type)) +
+  geom_col(position = "dodge") +
+  labs(title = "Flight Frequencies by Month and Carrier Type",
+       subtitle = "Analysis of Seasonal Patterns Across Different Carrier Types",
+       x = "Month",
+       y = "Flight Count",
+       fill = "Carrier Type") +
+  scale_y_continuous(labels = comma) +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+
+# Alternative: Line plot to better show trends
+ggplot(flight_summary, aes(x = month, y = flight_count, color = carrier_type, group = carrier_type)) +
+  geom_line(linewidth = 1.2) +
+  geom_point(size = 2) +
+  labs(title = "Seasonal Flight Frequency Trends by Carrier Type",
+       subtitle = "Monthly variation in flight operations",
+       x = "Month",
+       y = "Flight Count",
+       color = "Carrier Type") +
+  scale_y_continuous(labels = comma) +
+  scale_x_continuous(breaks = 1:7) +
+  theme_minimal()
+```
+
+
+```{r}
+# Calculate percentage distribution
+monthly_totals <- flight_summary %>%
+  group_by(month) %>%
+  summarise(total_flights = sum(flight_count))
+
+flight_percentage <- flight_summary %>%
+  left_join(monthly_totals, by = "month") %>%
+  mutate(percentage = (flight_count / total_flights) * 100)
+
+# View percentage distribution
+print(flight_percentage)
+```
+
+
+```{r}
+#Perform Chi-Square Test (Simplest approach)
+cat("\n=== CHI-SQUARE TEST ===\n")
+chi_test <- chisq.test(flight_summary$flight_count)
+print(chi_test)
+```
+
+
+####  Total Flights by month
+
+```{r}
+# Calculate total flights by month
+monthly_flights <- flights %>%
+  group_by(month) %>%
+  summarise(
+    total_flights = n(),
+    .groups = 'drop'
+  ) %>%
+  arrange(desc(total_flights))
+
+# Create month labels
+month_labels <- c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul")
+
+# Create proper month order while showing highest to lowest
+monthly_flights_ordered <- monthly_flights %>%
+  mutate(
+    month_name = factor(month, 
+                       levels = 1:7,
+                       labels = month_labels[1:7]),
+    rank = rank(-total_flights)
+  ) %>%
+  arrange(desc(total_flights))
+
+# Create the plot
+ggplot(monthly_flights_ordered, aes(x = reorder(month_name, -total_flights), 
+                                   y = total_flights,
+                                   fill = total_flights)) +
+  geom_col(alpha = 0.8) +
+  geom_text(aes(label = paste0(format(total_flights, big.mark = ","), 
+                              "\n(", rank, ")")), 
+            vjust = -0.08, size = 1.9, fontface = "bold") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue", 
+                     name = "Total Flights") +
+  labs(title = "monthly Flight Volume (January - July)",
+       subtitle = "Ranked from highest to lowest, with rank numbers in parentheses",
+       x = "month",
+       y = "Total Number of Flights") +
+  theme_minimal() +
+  theme(plot.title = element_text(hjust = 0.5, size = 10),
+        plot.subtitle = element_text(hjust = 0.5),
+        axis.text.x = element_text(angle = 0, hjust = 0.5))
+
+```
+
+```{r}
+# Correlation between distance and month
+cor(monthly_flights$month, monthly_flights$total_flights, use = "complete.obs")
+```
+
+There is a strong correlation between month and total flights
+
+####  Passenger by carrier
+
+```{r}
+
+# Top 10 carriers by average passengers
+top_carriers <- flights_clean %>%
+  group_by(unique_carrier_name) %>%
+  summarise(avg_passengers = mean(passengers, na.rm = TRUE),
+            n_flights = n()) %>%
+  filter(n_flights > 100) %>%  # Only carriers with sufficient data
+  arrange(desc(avg_passengers)) %>%
+  head(10)
+
+ggplot(top_carriers, aes(x = reorder(unique_carrier_name, avg_passengers), 
+                        y = avg_passengers, 
+                        fill = avg_passengers)) +
+  geom_col() +
+  coord_flip() +
+  labs(title = "Top 10 Carriers by Average passengers per Flight",
+       x = "Carrier",
+       y = "Average Number of passengers") +
+  scale_fill_gradient(low = "lightblue", high = "darkblue") +
+  theme_minimal()
+```
+
+
+```{r}
+# 6. ANOVA to test categorical relationships
+cat("\n=== ANOVA: PASSENGERS BY CARRIER TYPE ===\n")
+anova_carrier <- aov(passengers ~ carrier_type, data = flights_clean)
+summary(anova_carrier)
+
+cat("\n=== ANOVA: PASSENGERS BY DISTANCE CATEGORY ===\n")
+anova_distance <- aov(passengers ~ distance_cat, data = flights_clean)
+summary(anova_distance)
+
+```
+
+
+
+
