@@ -33,3 +33,6 @@ Checked unique values for key variables (CARRIER_GROUP, DISTANCE_GROUP, MONTH)
   Saved cleaned dataset as RDS file for analysis
   
 Result: Cleaned dataset with 32,476 passenger flights ready for robust analysis.
+
+Data visualization: rmd file visualization_FP_606.Rmd
+statistical analysis file Statistical_analysis_finalProject_606.Rmd
