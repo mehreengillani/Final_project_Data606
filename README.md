@@ -34,5 +34,30 @@ Checked unique values for key variables (CARRIER_GROUP, DISTANCE_GROUP, MONTH)
   
 Result: Cleaned dataset with 32,476 passenger flights ready for robust analysis.
 
-Data visualization: rmd file visualization_FP_606.Rmd
-statistical analysis file Statistical_analysis_finalProject_606.Rmd
+Data visualization: rmd file: visualization_FP_606.Rmd
+The investigation employs extensive univariate and multivariate data visualization techniques to uncover insights about:
+
+1.  Passenger distribution and travel demand fluctuations
+2.  Flight frequency patterns across major routes
+3.  Origin-destination dynamics and popular travel corridors
+4.  Carrier performance comparisons across three categories: Major, National, and Regional carriers
+
+Statsitical Analysis: rmd file: Statistical_analysis_FP_606.Rmd
+
+Research Questions & Methodology
+
+1. Seasonal Flight Distribution
+
+I tested whether flight frequencies are uniformly distributed across months using a chi‑square goodness‑of‑fit test. 
+Our analysis provides strong evidence against equal monthly distribution (χ² = 155.54, df = 6, p ≈ 0), indicating airlines strategically adjust schedules in response to seasonal travel patterns.
+
+2. Carrier‑Type Performance
+evaluated differences in flight frequencies and passenger volumes across three carrier classifications—major, national, and regional—using:
+
+Chi‑square tests for flight frequency comparisons
+ANOVA for passenger volume analysis
+
+Performed Linear regression for passengers and flight 
+
+Statstatistical analysis file Statistical_analysis_finalProject_606.Rmd
+
