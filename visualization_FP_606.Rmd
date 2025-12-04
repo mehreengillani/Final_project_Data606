@@ -1,0 +1,753 @@
+---
+title: "Final Project 606 Visualizations"
+author: "Mehreen Ali Gillani"
+output:
+  html_document: default
+  pdf_document: default
+date: "2025-11-26"
+editor_options:
+  markdown:
+    wrap: 72
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+
+# import Libraries
+
+library(GGally)
+library(scales)
+library(tidyverse)
+library(corrplot)
+library(gridExtra)
+library(patchwork)
+library(ggcorrplot)
+library(viridis)
+```
+
+# Flight Data Analysis: U.S. Domestic Air Travel Patterns (Jan-July 2025)
+
+## Project Overview
+
+This analysis examines U.S. domestic air travel patterns during the
+first seven months of 2025, utilizing data from the T-100 Domestic
+Market (U.S. Carriers) dataset. The comprehensive visualization explores
+key metrics including passenger volume, flight operations, freight, mail
+transportation, and distance patterns across the national air network.
+
+## Analysis Scope
+
+The investigation employs extensive univariate and multivariate data
+visualization techniques to uncover insights about:
+
+-   Passenger distribution and travel demand fluctuations
+
+-   Flight frequency patterns across major routes
+
+-   Origin-destination dynamics and popular travel corridors
+
+-   Carrier performance comparisons across three categories: Major,
+    National, and Regional carriers
+
+## Key Focus Areas
+
+Through correlation analysis and comparative visualization, this report
+specifically examines relationships between:
+
+-   Passenger volume and flight frequency
+
+-   Distance traveled and carrier type preferences
+
+-   Geographic patterns in origin and destination cities
+
+-   Market segmentation across different carrier classifications
+
+## Methodology
+
+The analysis employs R programming with visualization packages including
+ggplot2 to create interactive and informative representations of complex
+air travel data, providing stakeholders with actionable insights into
+2025 domestic aviation trends.
+
+**Read Flights**
+
+```{r read_file}
+
+url <- "https://raw.githubusercontent.com/mehreengillani/Final_project_Data606/refs/heads/main/flights_data_clean.csv"
+flights <- read_csv(url)
+
+```
+
+```{r}
+# Verify the new dataframe
+dim(flights)
+colnames(flights)
+view(flights)
+```
+
+## 1. UNI-variate analysis:
+
+#### 1.1 NUMERICAL VARIABLES
+
+```{r}
+# Set theme for better visuals
+theme_set(theme_minimal())
+
+# Passengers distribution
+p1 <- ggplot(flights, aes(x = passengers)) +
+  geom_histogram(bins = 30, fill = "steelblue", alpha = 0.7) +
+  labs(title = "Distribution of Passengers",
+       x = "Number of Passengers", y = "Count") +
+  scale_x_continuous(labels = scales::comma)
+
+# Distance distribution
+p2 <- ggplot(flights, aes(x = distance)) +
+  geom_histogram(bins = 30, fill = "darkorange", alpha = 0.7) +
+  labs(title = "Distribution of Distance",
+       x = "Distance", y = "Count") +
+  scale_x_continuous(labels = scales::comma)
+
+# 1. Create binary indicator
+flights <- flights %>%
+  mutate(has_cargo = ifelse(mail > 0 | freight > 0, "Yes", "No"))
+
+# Add title to the table output
+cat("=== CARGO VS PASSENGER-ONLY FLIGHTS ===\n")
+table(flights$has_cargo)
+
+# Or with proportions
+prop.table(table(flights$has_cargo))
+# 2. Plot cargo vs no-cargo flights
+p3 <- ggplot(flights, aes(x = has_cargo, fill = has_cargo)) +
+  geom_bar() +
+  geom_text(stat = "count", aes(label = ..count..), 
+            vjust = -0.5, size = 4, fontface = "bold") +
+  labs(title = "Flights with Cargo vs Passenger-Only",
+       x = "Carries Cargo?", y = "Number of Flights")
+
+# 3. Distribution of non-zero cargo
+cargo_flights <- flights %>% filter(mail > 0 | freight > 0)
+
+# mail distribution
+p4 <-ggplot(cargo_flights, aes(x = mail)) +
+  geom_histogram(bins = 30, fill = "brown") +
+  labs(title = "Mail Distribution \n (Non-zero flights only)")
+
+# Freight distribution
+p5 <- ggplot(cargo_flights, aes(x = freight)) +
+  geom_histogram(bins = 30, fill = "darkred") +
+  labs(title = "Freight Distribution\n(Non-zero flights only)")
+# Numerical plots grid
+grid.arrange(p1, p2, p5, p4, ncol = 2)
+print(p3)
+```
+
+#### 1.2 CATEGORICAL VARIABLES
+
+```{r}
+
+# Carrier type distribution
+p5 <- ggplot(flights, aes(x = carrier_type)) +
+  geom_bar(fill = "skyblue", alpha = 0.7) +
+  labs(title = "Distribution by Carrier Type",
+       x = "Carrier Type", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Month distribution
+p6 <- ggplot(flights, aes(x = month_name)) +
+  geom_bar(fill = "lightgreen", alpha = 0.7) +
+  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.2) +
+  labs(title = "Distribution by Month",
+       x = "Month", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Origin city distribution (top 15)
+top_origins <- flights %>%
+  count(origin_city_name) %>%
+  arrange(desc(n)) %>%
+  head(15)
+
+p7 <- ggplot(top_origins, aes(x = reorder(origin_city_name, n), y = n)) +
+  geom_bar(stat = "identity", fill = "coral", alpha = 0.7) +
+  labs(title = "Top 15 Origin Cities",
+       x = "Origin Cities", y = "Count") +
+  coord_flip()
+
+# Destination city distribution (top 15)
+top_dests <- flights %>%
+  count(dest_city_name) %>%
+  arrange(desc(n)) %>%
+  head(15)
+
+p8 <- ggplot(top_dests, aes(x = reorder(dest_city_name, n), y = n)) +
+  geom_bar(stat = "identity", fill = "goldenrod", alpha = 0.7) +
+  labs(title = "Top 15 Destination Cities",
+       x = "Destination Cities", y = "Count") +
+  coord_flip()
+
+# Distance category distribution
+p99 <- ggplot(flights, aes(x = distance_cat)) +
+  geom_bar(fill = "lightpink", alpha = 0.7) +
+  labs(title = "Distribution by Distance Category",
+       x = "Distance Category", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Create new distance categories (5 categories)
+flights_distance <- flights %>%
+  mutate(distance_cat_5 = cut(distance,
+                             breaks = c(0, 300, 600, 1200, 2400, Inf),
+                             labels = c("Short(0-300mi)", 
+                                        "Medium-Short(301-600mi)",
+                                        "Medium(601-1200mi)", 
+                                        "Long(1201-2400mi)",
+                                        "Very Long(2400+mi)"),
+                             include.lowest = TRUE))
+
+# Plot with new categories
+p9 <- ggplot(flights_distance, aes(x = distance_cat_5)) +
+  geom_bar(fill = "#2E86AB") +
+  geom_text(stat = 'count', aes(label = ..count..), vjust = -0.2) +
+  labs(title = "Flights by Distance", x = "Distance", y = "Count") +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+# Class distribution
+p10 <- ggplot(flights, aes(x = class)) +
+  geom_bar(fill = "lightsteelblue", alpha = 0.7) +
+  labs(title = "Distribution by Class",
+       x = "Class", y = "Count")
+
+
+# Get top 15 routes
+top_routes <- flights %>%
+  count(route) %>%
+  arrange(desc(n)) %>%
+  head(15)
+
+# Plot top 15 routes
+p11 <- ggplot(top_routes, aes(x = reorder(route, n), y = n)) +
+  geom_bar(stat = "identity", fill = "lightblue", alpha = 0.8) +
+  geom_text(aes(label = scales::comma(n)), 
+            hjust = -0.2, size = 3.5, color = "darkblue") +
+  labs(title = "Top 15 Busiest Routes",
+       subtitle = "Most frequently traveled flight routes",
+       x = NULL, 
+       y = "Number of Flights") +
+  scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.1))) +
+  coord_flip() 
+
+
+# 3. ARRANGE PLOTS IN GRID
+
+# Arrange plots with proper spacing and sizing
+grid.arrange(p5, p6, ncol = 2)
+             #padding = unit(3, "cm")
+grid.arrange(p9,p10, ncol = 2)
+# State distribution plots
+grid.arrange(p7, p8, ncol = 2)
+
+#Route
+grid.arrange(p11, ncol = 2)
+```
+
+```{r}
+# summary for key metrics only
+summary_table <- flights %>% 
+  select(carrier_type, month_name, class) %>%
+  summary() 
+print(summary_table)
+summary(flights_distance$distance_cat_5)
+```
+
+```{r}
+# Summary statistics for numerical variables
+summary_stats <- flights %>%
+  select(passengers, distance, freight, mail) %>% #,class, carrier_type, month_name, distance_group) %>%
+  summary()
+print(summary_stats)
+
+```
+
+## 2. Multi-variate Analysis
+
+```{r}
+# Scatter plot with alpha for overplotting
+p1 <- ggplot(flights, aes(x = distance, y = passengers)) +
+  geom_point(alpha = 0.3, size = 1, color = "darkblue") +
+  labs(title = "Passengers vs Distance",
+       subtitle = "Scatter plot showing relationship between flight distance and passenger count",
+       x = "Distance (miles)", 
+       y = "Number of Passengers") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
+  theme(plot.title = element_text(face = "bold", size = 14))
+
+print(p1)
+
+```
+
+```{r}
+# Hexbin plot for dense data
+p2 <- ggplot(flights, aes(x = distance, y = passengers)) +
+  geom_hex(bins = 50) +
+  scale_fill_viridis_c(name = "Number of\nFlights") +
+  labs(title = "Passengers vs Distance",
+       subtitle = "Hexbin plot showing density of flights",
+       x = "Distance (miles)", 
+       y = "Number of Passengers") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
+  theme(plot.title = element_text(face = "bold", size = 14))
+
+print(p2)
+```
+
+```{r}
+# Set theme
+theme_set(theme_minimal())
+
+## PLOT 1: Passengers vs Distance colored by Carrier Type
+p1 <- ggplot(flights, aes(x = distance, y = passengers, color = carrier_type)) +
+  geom_point(alpha = 0.6, size = 1.5) +
+  scale_color_viridis_d(name = "Carrier Type") +  # Changed to _d for discrete
+  labs(title = "Passengers vs Distance by Carrier Type",
+       subtitle = "Relationship between flight distance and passenger count across different carrier types",
+       x = "Distance (miles)", 
+       y = "Number of Passengers") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        plot.subtitle = element_text(size = 10, color = "gray50"),
+        legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+print(p1)
+```
+
+```{r}
+## PLOT 2: Freight vs Distance by Carrier Type
+p2 <- ggplot(flights, aes(x = distance, y = freight, color = carrier_type)) +
+  geom_point(alpha = 0.7, size = 1.5) +
+  labs(title = "Freight vs Distance by Carrier Type",
+       subtitle = "Relationship between flight distance and freight volume across different carrier types",
+       x = "Distance (miles)", 
+       y = "Freight Volume") +
+  scale_y_continuous(labels = scales::comma) +
+  scale_x_continuous(labels = scales::comma) +
+  theme(plot.title = element_text(face = "bold", size = 14),
+        plot.subtitle = element_text(size = 10, color = "gray50"),
+        legend.position = "bottom") +
+  guides(color = guide_legend(nrow = 2, byrow = TRUE))
+
+print(p2)
+```
+
+```{r}
+# Distance Distribution by Month
+p1 <- ggplot(flights, aes(x = factor(month), y = distance, fill = factor(month))) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "Distance Distribution by Month",
+       subtitle = "Boxplot showing distance variations across months",
+       x = "Month", y = "Distance (miles)") +
+  scale_fill_viridis_d() +
+  guides(fill = "none") +
+  theme(axis.text.x = element_text(angle = 0, hjust = 0.5))
+
+print(p1)
+```
+
+```{r}
+# Line plot with confidence intervals showing monthly trends
+p3 <- flights %>%
+  group_by(month) %>%
+  summarise(
+    avg_distance = mean(distance, na.rm = TRUE),
+    se_distance = sd(distance, na.rm = TRUE) / sqrt(n())
+  ) %>%
+  ggplot(aes(x = month, y = avg_distance)) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_point(color = "steelblue", size = 2) +
+  geom_ribbon(aes(ymin = avg_distance - 1.96*se_distance, 
+                  ymax = avg_distance + 1.96*se_distance), 
+              alpha = 0.2, fill = "steelblue") +
+  labs(title = "Average Distance by Month",
+       subtitle = "Line plot with confidence intervals showing monthly trends",
+       x = "Month", y = "Average Distance (miles)") +
+  scale_x_continuous(breaks = 1:12)+ ylim(500, NA)
+
+print(p3)
+```
+
+```{r}
+# First aggregate the data
+monthly_agg <- flights %>%
+  count(month, carrier_type) %>%
+  mutate(month_name = factor(month.abb[month], levels = month.abb))
+
+p2 <- ggplot(monthly_agg, 
+             aes(x = month_name, y = n, 
+                 color = carrier_type, group = carrier_type)) +
+  geom_line(size = 1, alpha = 0.8) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Set1", name = "Carrier Type") +
+  labs(title = "Monthly Flight Trends by Carrier Type",
+       subtitle = "Line chart showing seasonal patterns",
+       x = "Month", 
+       y = "Number of Flights") +
+  scale_y_continuous(labels = scales::comma) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p2)
+summary(monthly_agg)
+
+```
+
+```{r}
+# Ensure correct ordering
+p3 <- flights %>%
+  mutate(passenger_group = case_when(
+    passengers <= 150 ~ "1. Small (≤150)",
+    passengers <= 300 ~ "2. Medium (151-300)",
+    passengers <= 500 ~ "3. Large (301-500)",
+    TRUE ~ "4. Very Large (>500)"
+  )) %>%
+  group_by(month, passenger_group) %>%
+  summarise(
+    avg_distance = mean(distance, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  ggplot(aes(x = month, y = avg_distance, color = passenger_group, group = passenger_group)) +
+  geom_line(size = 1) +
+  geom_point(size = 2) +
+  labs(title = "Average Flight Distance by Passenger Group",
+       subtitle = "Grouped by passenger capacity",
+       x = "Month", y = "Average Distance (miles)") +
+  scale_x_continuous(breaks = 1:12, labels = month.abb) +
+  scale_color_brewer(palette = "Set1", name = "Passenger Group",
+                    labels = c("Small (≤150)", "Medium (151-300)", 
+                              "Large (301-500)", "Very Large (>500)")) +
+  theme_minimal()
+
+print(p3)
+```
+
+```{r}
+p1_labeled <- flights %>%
+  mutate(passenger_group = factor(case_when(
+    passengers <= 150 ~ "Small (≤150)",
+    passengers <= 300 ~ "Medium (151-300)",
+    passengers <= 500 ~ "Large (301-500)",
+    TRUE ~ "Very Large (>500)"
+  ), levels = c("Small (≤150)", "Medium (151-300)", "Large (301-500)", "Very Large (>500)"))) %>%
+  count(carrier_type, passenger_group, month) %>%
+  mutate(month_name = factor(month.abb[month], levels = month.abb)) %>%
+  ggplot(aes(x = month_name, y = carrier_type, fill = n)) +
+  geom_tile(color = "white", size = 0.5) +
+  geom_text(aes(label = ifelse(n > 50, scales::comma(n), "")), 
+            size = 2.8, color = "white", fontface = "bold") +
+  facet_wrap(~ passenger_group, ncol = 2) +
+  scale_fill_gradient(
+    name = "Flights",
+    low = "skyblue", 
+    high = "darkblue",
+    trans = "sqrt",
+    labels = scales::comma
+  ) +
+  labs(title = "Monthly Flight Distribution by Carrier and Passenger Group",
+       x = "Month", y = "Carrier Type") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+
+print(p1_labeled)
+```
+
+```{r}
+p2 <- flights %>%
+  group_by(carrier_type, month) %>%
+  summarise(total_passengers = sum(passengers, na.rm = TRUE), .groups = "drop") %>%
+  mutate(month_name = factor(month.abb[month], levels = month.abb)) %>%
+  ggplot(aes(x = month_name, y = total_passengers, fill = carrier_type)) +
+  geom_bar(stat = "identity", position = "dodge", width = 0.7) +
+  scale_fill_brewer(palette = "Set2", name = "Carrier Type") +
+  scale_y_continuous(labels = scales::comma, expand = expansion(mult = c(0, 0.1))) +
+  labs(title = "Monthly Passenger Volume by Carrier Type",
+       subtitle = "Total passengers transported each month",
+       x = "Month", y = "Total Passengers") +
+  theme_minimal() +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold", size = 16),
+    plot.subtitle = element_text(size = 12, color = "gray50")
+  )
+
+print(p2)
+```
+
+```{r}
+p4 <- ggplot(flights, aes(x = carrier_type, y = passengers, fill = carrier_type)) +
+  geom_boxplot(alpha = 0.7) +
+  labs(title = "Passenger Distribution by Carrier Type",
+       x = "Carrier Type", y = "Passengers") +
+  scale_y_continuous(labels = scales::comma) +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_fill_brewer(palette = "Set2")
+print(p4)
+```
+
+```{r}
+# Prepare the data
+top_routes_10 <- flights %>%
+  group_by(origin_city_name, dest_city_name) %>%
+  summarise(
+    total_passengers = sum(passengers, na.rm = TRUE),
+    total_flights = n(),
+    #avg_passengers = mean(passengers, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_passengers)) %>%
+  head(10) %>%
+  mutate(route_label = paste(origin_city_name, "→", dest_city_name))
+
+p11_clean <- ggplot(top_routes_10, 
+                    aes(x = reorder(route_label, total_passengers), 
+                        y = total_passengers)) +
+  geom_col(fill = "lightblue", width = 0.6, alpha = 0.8) +
+  geom_text(aes(label = scales::comma(total_passengers)), 
+            hjust = -0.2, size = 4.5, fontface = "bold", color = "#2E86AB") +
+  geom_text(aes(label = paste("(", total_flights, "flights)")), 
+            hjust = 1.1, size = 3.5, color = "darkblue") +
+  labs(title = "Top 10 Busiest Air Routes",
+       subtitle = "Passenger volume and flight frequency",
+       x = NULL, y = NULL) +
+  scale_y_continuous(labels = NULL, expand = expansion(mult = c(0, 0.25))) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 20, hjust = 0.5),
+    plot.subtitle = element_text(size = 14, color = "darkblue", hjust = 0.5),
+    axis.text.y = element_text(size = 13, face = "bold", margin = margin(r = 15)),
+    panel.grid = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks = element_blank()
+  )
+
+print(p11_clean)
+```
+
+```{r}
+# Get top 10 carriers by passenger volume
+top_carriers <- flights %>%
+  group_by(unique_carrier_name) %>%
+  summarise(
+    total_passengers = sum(passengers, na.rm = TRUE),
+    total_flights = n(),
+    avg_passengers = mean(passengers, na.rm = TRUE),
+    .groups = "drop"
+  ) %>%
+  arrange(desc(total_passengers)) %>%
+  head(10)
+
+# Create the plot
+p_carriers <- ggplot(top_carriers, 
+                     aes(x = reorder(unique_carrier_name, total_passengers), 
+                         y = total_passengers)) +
+  geom_col(fill = "#4C72B0", width = 0.7, alpha = 0.8) +
+  geom_text(aes(label = scales::comma(total_passengers)), 
+            hjust = -0.1, size = 4, fontface = "bold", color = "#4C72B0") +
+  geom_text(aes(label = paste("(", total_flights, "flights)")), 
+            hjust = 1.1, size = 3.5, color = "gray40") +
+  labs(title = "Top 10 Airlines by Passenger Volume",
+       subtitle = "Total passengers transported with flight count",
+       x = NULL, 
+       y = NULL) +
+  scale_y_continuous(labels = NULL, expand = expansion(mult = c(0, 0.2))) +
+  coord_flip() +
+  theme_minimal() +
+  theme(
+    plot.title = element_text(face = "bold", size = 18, hjust = 0.5),
+    plot.subtitle = element_text(size = 14, color = "gray50", hjust = 0.5),
+    axis.text.y = element_text(size = 12, face = "bold", margin = margin(r = 15)),
+    panel.grid = element_blank(),
+    axis.text.x = element_blank()
+  )
+
+print(p_carriers)
+```
+
+```{r}
+# Select only numeric variables for correlation analysis
+numeric_vars <- flights %>%
+  select(passengers, freight, mail, distance, month, distance_group)
+
+# Correlation matrix
+cor_matrix <- cor(numeric_vars, use = "complete.obs")
+print(cor_matrix)
+
+# Correlation plot
+corrplot(cor_matrix, method = "color", type = "upper", 
+         tl.cex = 0.8, tl.col = "black", 
+         title = "Correlation Matrix of Flight Variables",
+         mar = c(0,0,1,0))
+
+# Scatterplot matrix for key variables
+pairs(numeric_vars[,1:4], pch = 19, cex = 0.3, 
+      main = "Scatterplot Matrix: Passengers, Freight, Mail, Distance")
+
+# Focus on passenger relationships
+library(ggplot2)
+ggplot(flights, aes(x = distance, y = passengers)) +
+  geom_point(alpha = 0.3, color = "steelblue") +
+  geom_smooth(method = "lm", color = "red") +
+  labs(title = "Passengers vs Distance",
+       subtitle = paste("Correlation:", round(cor(flights$distance, flights$passengers, use = "complete.obs"), 3)))
+
+```
+
+## 3. Correlation
+
+```{r}
+# 1. Convert categorical variables to numeric for 
+
+flights_cor <- flights %>%
+  mutate(
+    carrier_type_num = as.numeric(as.factor(carrier_type)),
+    distance_cat_num = as.numeric(as.factor(distance_cat)),
+    month_num = as.numeric(as.factor(month_name)),
+    origin_num = as.numeric(as.factor(origin_city_name)),
+    dest_num = as.numeric(as.factor(dest_city_name)),
+    class_num = as.numeric(as.factor(class))
+  ) %>%
+  select(passengers, freight, mail, distance,
+         carrier_type_num, distance_cat_num, month_num, origin_num, dest_num, class_num)
+
+# 2. Correlation matrix with categoricals
+cor_matrix_full <- cor(flights_cor)
+print(cor_matrix_full)
+
+# 3. Visualize full correlation matrix
+corrplot(cor_matrix_full, method = "color", type = "upper",
+         tl.cex = 0.7, tl.col = "black",
+         title = "Correlation Matrix Including Categorical Variables",
+         mar = c(0,0,2,0))
+
+```
+
+```{r}
+# Which carrier types and distance categories have the most passengers?
+flights %>%
+  group_by(carrier_type) %>%
+  summarise(mean_passengers = mean(passengers)) %>%
+  arrange(desc(mean_passengers))
+
+flights %>%
+  group_by(distance_cat) %>%
+  summarise(mean_passengers = mean(passengers)) %>%
+  arrange(desc(mean_passengers))
+# Plot 1: Passengers by Carrier Type
+p1 <- ggplot(flights, aes(x = carrier_type, y = passengers, fill = carrier_type)) +
+  geom_boxplot(alpha = 0.8) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 3, color = "red") +
+  labs(title = "Passenger Distribution by Carrier Type",
+       subtitle = "ANOVA: F = 615.1, p < 0.001 ***",
+       x = "Carrier Type", y = "Number of Passengers") +
+  scale_fill_brewer(palette = "Set2") +
+  theme_minimal() +
+  theme(legend.position = "none")
+
+# Plot 2: Passengers by Distance Category
+p2 <- ggplot(flights, aes(x = distance_cat, y = passengers, fill = distance_cat)) +
+  geom_boxplot(alpha = 0.8) +
+  stat_summary(fun = mean, geom = "point", shape = 18, size = 3, color = "red") +
+  labs(title = "Passenger Distribution by Distance Category",
+       subtitle = "ANOVA: F = 93.51, p < 0.001 ***",
+       x = "Distance Category", y = "Number of Passengers") +
+  scale_fill_brewer(palette = "Set3") +
+  theme_minimal() +
+  theme(legend.position = "none",
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+# Display plots
+library(patchwork)
+(p1 | p2) 
+```
+
+```{r}
+monthly_trends <- flights %>%
+  group_by(month) %>%
+  summarise(
+    mean_passengers = mean(passengers),
+    ci_lower = mean_passengers - 1.96 * (sd(passengers) / sqrt(n())),
+    ci_upper = mean_passengers + 1.96 * (sd(passengers) / sqrt(n())),
+    .groups = "drop"
+  ) %>%
+  mutate(month_name = factor(month.abb[month], levels = month.abb))
+
+ggplot(monthly_trends, aes(x = month_name, y = mean_passengers, group = 1)) +
+  geom_ribbon(aes(ymin = ci_lower, ymax = ci_upper), 
+              fill = "lightblue", alpha = 0.3) +
+  geom_line(color = "steelblue", size = 1) +
+  geom_point(color = "darkblue", size = 2) +
+  ylim(20, NA) +
+  labs(title = "Monthly Passenger Trends with 95% CI",
+       subtitle = "Shaded area shows uncertainty in monthly estimates",
+       x = "Month", y = "Average Passengers")
+```
+
+```{r}
+# Create aggregated data with both flight counts and passenger info
+flight_data <- flights %>%
+  group_by(carrier_type, month) %>%  # grouping variables
+  summarise(
+    flight_count = n(),               # Number of flights
+    total_passengers = sum(passengers),  # Total passengers
+    avg_passengers = mean(passengers),   # Average per flight
+    .groups = "drop"
+  )
+p3 <- ggplot(flight_data, 
+                   aes(x = total_passengers, y = flight_count, 
+                       color = carrier_type)) +
+  # Size only on points, not global
+  geom_point(aes(size = avg_passengers), alpha = 0.7) +
+  # No size in geom_smooth
+  geom_smooth(method = "lm", se = FALSE, aes(group = carrier_type)) +
+  labs(title = "Flights vs Total Passengers",
+       subtitle = "Bubble size = Average passengers per flight",
+       x = "Total Passengers", y = "Number of Flights") +
+  scale_size_continuous(name = "Avg Passengers") +
+  scale_x_continuous(labels = scales::comma) +
+  scale_y_continuous(labels = scales::comma) +
+  theme_minimal()
+
+print(p3)
+```
+
+## Key Findings:
+
+-   Passenger loads are right‑skewed—most flights operate below
+    capacity.
+
+-   Cargo operations are highly specialized; many flights carry no
+    freight/mail. Medium‑haul routes dominate (\>75% of flights),
+    reflecting hub‑and‑spoke networks.
+
+-   Route demand is directional: Washington ↔ Pittsburgh has asymmetric
+    passenger/flight counts.
+
+-   Carrier specialization by distance: regional (\<300 mi), national
+    (mid‑haul), major (long‑haul).
+
+-   Seasonal distance shift: short flights peak in February; longer
+    routes increase in July.
+
+-   Major carriers lead in flights and passengers across all months,
+    peaking in January.
+
+-   Regional/national carriers excel in small‑aircraft ops, not jumbo
+    jets.
+
+-   Large‑capacity flights (500+ passengers) maintain stable distances
+    all year.
+
+-   Highly fragmented market: 10,601 unique routes served by 77
+    carriers.
